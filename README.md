@@ -16,7 +16,7 @@ Note: This is backend project and we will neglect frontned, only build REST API
 Note: [ ] Todo, [X] Completed
 
 - [x] Authentication with JWT
-- [ ] User Management (profile, stats)
+- [x] User Management (profile, stats)
 - [ ] Room System
   - [ ] Create/Join/Leave Room API
   - [ ] Room Settings (max players, rounds)
