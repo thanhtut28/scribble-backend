@@ -27,4 +27,46 @@ model User {
   gamesPlayed Int @default(0)
   gamesWon    Int @default(0)
   totalScore  Int @default(0)
+
+  // Relations
+  rooms      UserRoom[]
+  ownedRooms Room[]     @relation("RoomOwner")
+}
+
+model Room {
+  id         String     @id @default(uuid())
+  name       String
+  maxPlayers Int        @default(8)
+  rounds     Int        @default(8)
+  isPrivate  Boolean    @default(false)
+  password   String?
+  status     RoomStatus @default(WAITING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  ownerId String
+  owner   User       @relation("RoomOwner", fields: [ownerId], references: [id])
+  users   UserRoom[]
+}
+
+model UserRoom {
+  id       String   @id @default(uuid())
+  userId   String
+  roomId   String
+  isReady  Boolean  @default(false)
+  joinedAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+  room Room @relation(fields: [roomId], references: [id])
+
+  @@unique([userId, roomId])
+}
+
+enum RoomStatus {
+  WAITING
+  PLAYING
+  FINISHED
 }

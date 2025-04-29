@@ -50,7 +50,7 @@ export class AuthService {
     // Update refresh token
     await this.updateRefreshToken(user.id, tokens.refreshToken);
 
-    return tokens;
+    return { ...tokens, user };
   }
 
   async signin(dto: SigninDto) {
@@ -78,7 +78,7 @@ export class AuthService {
     // Update refresh token
     await this.updateRefreshToken(user.id, tokens.refreshToken);
 
-    return tokens;
+    return { ...tokens, user };
   }
 
   async refreshTokens(dto: TokenDto) {
@@ -118,7 +118,7 @@ export class AuthService {
       // Update refresh token
       await this.updateRefreshToken(user.id, tokens.refreshToken);
 
-      return tokens;
+      return { ...tokens, user };
     } catch {
       throw new UnauthorizedException('Access denied');
     }

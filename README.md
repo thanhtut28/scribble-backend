@@ -17,17 +17,17 @@ Note: [ ] Todo, [X] Completed
 
 - [x] Authentication with JWT
 - [x] User Management (profile, stats)
-- [ ] Room System
-  - [ ] Create/Join/Leave Room API
-  - [ ] Room Settings (max players, rounds)
-  - [ ] Player Management in Rooms
+- [x] Room System
+  - [x] Create/Join/Leave Room API
+  - [x] Room Settings (max players, rounds)
+  - [x] Player Management in Rooms
 - [ ] Game Logic
   - [ ] Word Generation/Selection
   - [ ] Turn Management
   - [ ] Game State Management
   - [ ] Scoring System
-- [ ] Real-time Communication
-  - [ ] Socket.io Integration
+- [x] Real-time Communication
+  - [x] Socket.io Integration
   - [ ] Drawing Data Transmission
   - [ ] Chat System
   - [ ] Game Event Broadcasting
