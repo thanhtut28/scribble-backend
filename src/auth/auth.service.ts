@@ -11,6 +11,8 @@ import * as argon from 'argon2';
 interface JwtPayload {
   sub: string;
   email: string;
+  iat: number;
+  exp: number;
 }
 
 @Injectable()
@@ -158,7 +160,7 @@ export class AuthService {
         },
         {
           secret: process.env.JWT_SECRET,
-          expiresIn: '15m',
+          expiresIn: '1d',
         },
       ),
       this.jwtService.signAsync(

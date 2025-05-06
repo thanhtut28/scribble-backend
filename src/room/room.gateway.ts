@@ -27,6 +27,13 @@ const socketConfig = {
   pingTimeout: 60000,
 };
 
+// Define the token error interface
+interface TokenError {
+  code: string;
+  message: string;
+  redirectTo: string;
+}
+
 @WebSocketGateway(socketConfig)
 export class RoomGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
@@ -56,6 +63,8 @@ export class RoomGateway
         client.handshake.auth.token ||
         client.handshake.headers.authorization?.split(' ')[1];
 
+      console.log('token', token);
+
       if (!token) {
         client.emit('error', {
           message: 'Authentication failed: No token provided',
@@ -84,9 +93,22 @@ export class RoomGateway
         message: 'Successfully connected to room service',
       });
     } catch (error) {
-      // Invalid token or other error
-      console.error('Connection error:', error.message);
-      client.emit('error', { message: 'Authentication failed: Invalid token' });
+      // Check if error is due to JWT token expiration
+      if (error.name === 'TokenExpiredError') {
+        console.error('Connection error: JWT token expired');
+        client.emit('error', {
+          code: 'TOKEN_EXPIRED',
+          message: 'Authentication failed: Token expired',
+          redirectTo: '/auth/login', // Provide redirect URL for the client
+        });
+      } else {
+        // Other token-related errors
+        console.error('Connection error:', error.message);
+        client.emit('error', {
+          code: 'AUTH_FAILED',
+          message: 'Authentication failed: Invalid token',
+        });
+      }
       client.disconnect();
     }
   }
@@ -95,10 +117,47 @@ export class RoomGateway
     const userConnection = this.connectedUsers.get(client.id);
 
     if (userConnection && userConnection.roomId) {
-      // Handle user leaving a room when disconnecting
-      this.leaveRoom(client, userConnection.roomId).catch((err) => {
-        console.error('Error handling disconnect:', err);
-      });
+      // Instead of immediately removing the user, set a timeout
+      // This gives them time to reconnect if they're just refreshing the page
+      console.log(
+        `Client ${client.id} disconnected, setting reconnect timeout...`,
+      );
+
+      // Store the user connection details before removing from the map
+      const { userId, roomId } = userConnection;
+
+      // Set a timeout to actually remove them from the room after 10 seconds
+      setTimeout(() => {
+        // Check if the user has already reconnected
+        let reconnected = false;
+
+        // Look through all connected users to see if this user reconnected with a different socket
+        for (const [_, connection] of this.connectedUsers.entries()) {
+          if (connection.userId === userId) {
+            reconnected = true;
+            break;
+          }
+        }
+
+        // Only leave the room if they haven't reconnected
+        if (!reconnected) {
+          console.log(
+            `User ${userId} did not reconnect, removing from room ${roomId}`,
+          );
+          // We need to create a fake client for the leaveRoom method since the original client is gone
+          const fakeClient = {
+            emit: () => {},
+            leave: () => {},
+            disconnect: () => {},
+          } as unknown as Socket;
+
+          this.leaveRoom(fakeClient, roomId).catch((err) => {
+            console.error('Error handling delayed disconnect:', err);
+          });
+        } else {
+          console.log(`User ${userId} reconnected, keeping in room ${roomId}`);
+        }
+      }, 10000); // 10 seconds timeout
     }
 
     // Remove from connected users
@@ -137,6 +196,13 @@ export class RoomGateway
 
       return room;
     } catch (error) {
+      // Check for token expiration first
+      const tokenError = this.handleTokenExpiration(error, client);
+      if (tokenError) {
+        return tokenError;
+      }
+
+      // Handle other errors
       client.emit('error', { message: error.message });
       return { error: error.message };
     }
@@ -178,6 +244,13 @@ export class RoomGateway
 
       return room;
     } catch (error) {
+      // Check for token expiration first
+      const tokenError = this.handleTokenExpiration(error, client);
+      if (tokenError) {
+        return tokenError;
+      }
+
+      // Handle other errors
       client.emit('error', { message: error.message });
       return { error: error.message };
     }
@@ -219,6 +292,13 @@ export class RoomGateway
 
       return result;
     } catch (error) {
+      // Check for token expiration first
+      const tokenError = this.handleTokenExpiration(error, client);
+      if (tokenError) {
+        return tokenError;
+      }
+
+      // Handle other errors
       client.emit('error', { message: error.message });
       return { error: error.message };
     }
@@ -231,6 +311,13 @@ export class RoomGateway
       const rooms = await this.roomService.getRooms();
       return rooms;
     } catch (error) {
+      // Check for token expiration first
+      const tokenError = this.handleTokenExpiration(error, client);
+      if (tokenError) {
+        return tokenError;
+      }
+
+      // Handle other errors
       client.emit('error', { message: error.message });
       return { error: error.message };
     }
@@ -243,8 +330,89 @@ export class RoomGateway
       const room = await this.roomService.getRoomById(roomId);
       return room;
     } catch (error) {
+      // Check for token expiration first
+      const tokenError = this.handleTokenExpiration(error, client);
+      if (tokenError) {
+        return tokenError;
+      }
+
+      // Handle other errors
       client.emit('error', { message: error.message });
       return { error: error.message };
     }
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('toggleReady')
+  async toggleReady(client: Socket, roomId: string) {
+    try {
+      const userConnection = this.connectedUsers.get(client.id);
+      if (!userConnection) {
+        throw new WsException('User not authenticated');
+      }
+
+      // Ensure user is in the room they're trying to toggle ready for
+      if (userConnection.roomId !== roomId) {
+        throw new WsException('You are not in this room');
+      }
+
+      const room = await this.roomService.toggleReady(
+        userConnection.userId,
+        roomId,
+      );
+
+      // Notify all users in the room about the ready status change
+      this.server.to(`room-${roomId}`).emit('playerReadyChanged', {
+        room,
+        userId: userConnection.userId,
+      });
+
+      return room;
+    } catch (error) {
+      // Check for token expiration first
+      const tokenError = this.handleTokenExpiration(error, client);
+      if (tokenError) {
+        return tokenError;
+      }
+
+      // Handle other errors
+      client.emit('error', { message: error.message });
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Helper method to handle token expiration errors
+   * @param error The caught error
+   * @param client The socket client
+   * @returns Object with error and redirect info if token expired, null otherwise
+   */
+  private handleTokenExpiration(
+    error: any,
+    client: Socket,
+  ): { error: string; redirectTo: string } | null {
+    if (error instanceof WsException) {
+      const wsError = error.getError();
+
+      // Check if it's our custom token expired error object
+      if (
+        typeof wsError === 'object' &&
+        wsError !== null &&
+        'code' in wsError &&
+        wsError.code === 'TOKEN_EXPIRED'
+      ) {
+        const errorDetails = wsError as TokenError;
+
+        // Send specific token expiration error
+        client.emit('error', errorDetails);
+
+        // Disconnect the client
+        client.disconnect();
+
+        return { error: 'Token expired', redirectTo: errorDetails.redirectTo };
+      }
+    }
+
+    return null;
   }
 }

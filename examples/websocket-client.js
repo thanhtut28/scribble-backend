@@ -11,7 +11,7 @@ const { io } = require('socket.io-client');
 
 // Replace with your JWT token
 const token =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MzdkODJmNS0zNmFiLTQ1NGItYWQyMC1mY2VkMTExNjdiMjYiLCJlbWFpbCI6InRoYUB0aGEuY29tIiwiaWF0IjoxNzQ1ODUxODgyLCJleHAiOjE3NDU4NTI3ODJ9.OvmfaCVONZaVTUya7JKn4ksrvDMX-v4tbPXw5jQmktU';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiM2U3MDk1MS05N2ExLTQyNjMtYTEwOC1hOTE2MDk5ZmRjOWEiLCJlbWFpbCI6ImJlcnJ5QGJlcnJ5LmNvbSIsImlhdCI6MTc0NjIwNDAyMCwiZXhwIjoxNzQ2MjkwNDIwfQ.qa7GoCqNNsd7SSgLC8agmRqX9Br55GTvOVspn-yxm8Y';
 
 // Connect to the WebSocket server
 const socket = io('ws://localhost:4000/rooms', {
@@ -54,36 +54,47 @@ socket.on('userLeft', (data) => {
 });
 
 // Example: Create a room after 2 seconds
+// setTimeout(() => {
+//   console.log('Creating a room...');
+//   socket.emit(
+//     'createRoom',
+//     {
+//       name: 'Test Room 3',
+//       maxPlayers: 8,
+//       rounds: 4,
+//     },
+//     (response) => {
+//       if (response.error) {
+//         console.error('Error creating room:', response.error);
+//       } else {
+//         console.log('Room created successfully:', response);
+//       }
+//     },
+//   );
+// }, 2000);
+
 setTimeout(() => {
-  console.log('Creating a room...');
+  console.log('Joining room...');
   socket.emit(
-    'createRoom',
-    {
-      name: 'Test Room',
-      maxPlayers: 4,
-      rounds: 5,
-    },
+    'joinRoom',
+    { roomId: '148babbc-536c-4a1b-b94d-1bb862cc3a9a' },
     (response) => {
-      if (response.error) {
-        console.error('Error creating room:', response.error);
-      } else {
-        console.log('Room created successfully:', response);
-      }
+      console.log('Joined room:', response);
     },
   );
 }, 2000);
 
 // Example: Get all rooms after 4 seconds
-setTimeout(() => {
-  console.log('Getting all rooms...');
-  socket.emit('getRooms', (response) => {
-    if (response.error) {
-      console.error('Error getting rooms:', response.error);
-    } else {
-      console.log('All rooms:', response);
-    }
-  });
-}, 4000);
+// setTimeout(() => {
+//   console.log('Getting all rooms...');
+//   socket.emit('getRooms', (response) => {
+//     if (response.error) {
+//       console.error('Error getting rooms:', response.error);
+//     } else {
+//       console.log('All rooms:', response);
+//     }
+//   });
+// }, 4000);
 
 // Keep the connection alive
 process.on('SIGINT', () => {

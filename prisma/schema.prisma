@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,41 +8,37 @@ datasource db {
 }
 
 model User {
-  id           String  @id @default(uuid())
-  email        String  @unique
-  username     String  @unique
+  id           String      @id @default(uuid())
+  email        String      @unique
+  username     String      @unique
   password     String
   refreshToken String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Game related fields
-  gamesPlayed Int @default(0)
-  gamesWon    Int @default(0)
-  totalScore  Int @default(0)
-
-  // Relations
-  rooms      UserRoom[]
-  ownedRooms Room[]     @relation("RoomOwner")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  gamesPlayed  Int         @default(0)
+  gamesWon     Int         @default(0)
+  totalScore   Int         @default(0)
+  ownedRooms   Room[]      @relation("RoomOwner")
+  rooms        UserRoom[]
+  drawings     Drawing[]
+  gameScores   GameScore[]
+  messages     Message[]
 }
 
 model Room {
   id         String     @id @default(uuid())
   name       String
   maxPlayers Int        @default(8)
-  rounds     Int        @default(8)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
   isPrivate  Boolean    @default(false)
+  ownerId    String
   password   String?
+  rounds     Int        @default(8)
   status     RoomStatus @default(WAITING)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  ownerId String
-  owner   User       @relation("RoomOwner", fields: [ownerId], references: [id])
-  users   UserRoom[]
+  owner      User       @relation("RoomOwner", fields: [ownerId], references: [id])
+  users      UserRoom[]
+  games      Game[]
 }
 
 model UserRoom {
@@ -57,16 +47,90 @@ model UserRoom {
   roomId   String
   isReady  Boolean  @default(false)
   joinedAt DateTime @default(now())
-
-  // Relations
-  user User @relation(fields: [userId], references: [id])
-  room Room @relation(fields: [roomId], references: [id])
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, roomId])
+}
+
+model Game {
+  id              String      @id @default(uuid())
+  roomId          String
+  currentRoundNum Int         @default(1)
+  status          GameStatus  @default(WAITING)
+  startedAt       DateTime    @default(now())
+  endedAt         DateTime?
+  room            Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  rounds          Round[]
+  scores          GameScore[]
+  messages        Message[]
+}
+
+model Round {
+  id          String      @id @default(uuid())
+  gameId      String
+  roundNumber Int
+  word        String
+  drawerId    String?
+  startedAt   DateTime    @default(now())
+  endedAt     DateTime?
+  status      RoundStatus @default(WAITING)
+  game        Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  drawings    Drawing[]
+
+  @@unique([gameId, roundNumber])
+}
+
+model Drawing {
+  id        String   @id @default(uuid())
+  roundId   String
+  userId    String
+  paths     Json
+  createdAt DateTime @default(now())
+  round     Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model GameScore {
+  id        String   @id @default(uuid())
+  gameId    String
+  userId    String
+  score     Int      @default(0)
+  correct   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([gameId, userId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  gameId    String
+  userId    String
+  content   String
+  isCorrect Boolean  @default(false)
+  createdAt DateTime @default(now())
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 enum RoomStatus {
   WAITING
   PLAYING
+  FINISHED
+}
+
+enum GameStatus {
+  WAITING
+  PLAYING
+  FINISHED
+}
+
+enum RoundStatus {
+  WAITING
+  DRAWING
+  GUESSING
   FINISHED
 }

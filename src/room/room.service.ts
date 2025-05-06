@@ -14,6 +14,21 @@ export class RoomService {
   constructor(private prisma: PrismaService) {}
 
   async createRoom(userId: string, dto: CreateRoomDto) {
+    // Check if user is in any existing rooms and leave them first
+    const existingRooms = await this.prisma.userRoom.findMany({
+      where: {
+        userId: userId,
+      },
+      include: {
+        room: true,
+      },
+    });
+
+    // Leave all rooms the user might already be in
+    for (const existingRoom of existingRooms) {
+      await this.leaveRoom(userId, existingRoom.roomId);
+    }
+
     let hashedPassword: string | null = null;
 
     if (dto.isPrivate && dto.password) {
@@ -96,6 +111,21 @@ export class RoomService {
       throw new BadRequestException('You are already in this room');
     }
 
+    // Check if user is in any other room and leave it first
+    const existingRooms = await this.prisma.userRoom.findMany({
+      where: {
+        userId: userId,
+      },
+      include: {
+        room: true,
+      },
+    });
+
+    // Leave all other rooms the user might be in
+    for (const existingRoom of existingRooms) {
+      await this.leaveRoom(userId, existingRoom.roomId);
+    }
+
     // Check if room is private and requires password
     if (room.isPrivate && room.password) {
       if (!dto.password) {
@@ -158,7 +188,24 @@ export class RoomService {
     const room = await this.prisma.room.findUnique({
       where: { id: roomId },
       include: {
-        users: true,
+        users: {
+          include: {
+            user: true,
+          },
+          orderBy: {
+            joinedAt: 'asc', // Order by join time, oldest first
+          },
+        },
+        games: {
+          where: {
+            status: {
+              in: ['WAITING', 'PLAYING'],
+            },
+          },
+          select: {
+            id: true,
+          },
+        },
       },
     });
 
@@ -181,13 +228,18 @@ export class RoomService {
     }
 
     // If user is the owner and there are other players, make someone else the owner
-    if (room.ownerId === userId && room.users.length > 1) {
+    if (room.ownerId === userId && room.users.length >= 1) {
       // Find another user who is not the current owner
+      // Sort by joinedAt to get the user who has been in the room the longest
       const newOwner = room.users.find(
         (userRoom) => userRoom.userId !== userId,
       );
 
       if (newOwner) {
+        console.log(
+          `Transferring room ownership from ${userId} to ${newOwner.userId}`,
+        );
+
         // Update room with new owner
         await this.prisma.room.update({
           where: { id: roomId },
@@ -208,12 +260,24 @@ export class RoomService {
       },
     });
 
-    // If user is the owner and they're the only one in the room, delete the room
-    if (room.ownerId === userId && room.users.length <= 1) {
-      await this.prisma.room.delete({
-        where: { id: roomId },
-      });
-      return { message: 'Room deleted as you were the last player' };
+    // If user is the owner and they're the only one in the room, AND there are no active games, delete the room
+    if (
+      room.ownerId === userId &&
+      room.users.length <= 1 &&
+      room.games.length === 0
+    ) {
+      console.log(
+        `Deleting room ${roomId} as the last player left and no games exist`,
+      );
+      try {
+        await this.prisma.room.delete({
+          where: { id: roomId },
+        });
+        return { message: 'Room deleted as you were the last player' };
+      } catch (error) {
+        console.error('Failed to delete room:', error);
+        // Continue even if delete fails - we'll just return the updated room info
+      }
     }
 
     // Return updated room details
@@ -321,5 +385,88 @@ export class RoomService {
     }
 
     return room;
+  }
+
+  /**
+   * Toggle a player's ready status in a room
+   * @param userId The ID of the user
+   * @param roomId The ID of the room
+   * @returns The updated room details
+   */
+  async toggleReady(userId: string, roomId: string) {
+    // Check if room exists
+    const room = await this.prisma.room.findUnique({
+      where: { id: roomId },
+      include: {
+        users: true,
+      },
+    });
+
+    if (!room) {
+      throw new NotFoundException('Room not found');
+    }
+
+    // Check if user is in the room
+    const userRoom = await this.prisma.userRoom.findUnique({
+      where: {
+        userId_roomId: {
+          userId,
+          roomId,
+        },
+      },
+    });
+
+    if (!userRoom) {
+      throw new BadRequestException('You are not in this room');
+    }
+
+    // Check if game is already in progress
+    if (room.status === RoomStatus.PLAYING) {
+      throw new BadRequestException('Game is already in progress');
+    }
+
+    // Toggle ready status
+    await this.prisma.userRoom.update({
+      where: {
+        userId_roomId: {
+          userId,
+          roomId,
+        },
+      },
+      data: {
+        isReady: !userRoom.isReady,
+      },
+    });
+
+    // Return updated room details
+    const updatedRoom = await this.prisma.room.findUnique({
+      where: { id: roomId },
+      include: {
+        users: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+              },
+            },
+          },
+        },
+        owner: {
+          select: {
+            id: true,
+            username: true,
+          },
+        },
+      },
+    });
+
+    // Remove sensitive information
+    if (updatedRoom?.password) {
+      const { password, ...roomWithoutPassword } = updatedRoom;
+      return roomWithoutPassword;
+    }
+
+    return updatedRoom;
   }
 }

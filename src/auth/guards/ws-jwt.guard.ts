@@ -30,6 +30,22 @@ export class WsJwtGuard implements CanActivate {
 
       return true;
     } catch (err) {
+      // Check for token expiration
+      if (err.name === 'TokenExpiredError') {
+        // Custom exception for token expiration
+        const expiredError = new WsException({
+          code: 'TOKEN_EXPIRED',
+          message: 'Token has expired',
+          redirectTo: '/auth/login',
+        });
+
+        // Add the error to the client data so it can be accessed in decorators or interceptors
+        const client: Socket = context.switchToWs().getClient();
+        client.data.tokenError = expiredError;
+
+        throw expiredError;
+      }
+
       throw new WsException('Unauthorized');
     }
   }

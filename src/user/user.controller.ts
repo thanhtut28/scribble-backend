@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
 import { GetUser } from '../auth/decorators';
 import { JwtGuard } from '../auth/guards';
-import { UpdateUserDto } from './dto/user.dto';
+import { UpdatePasswordDto, UpdateUserDto } from './dto/user.dto';
 
 @UseGuards(JwtGuard)
 @Controller('users')
@@ -24,8 +24,16 @@ export class UserController {
     return this.userService.getUserByUsername(username);
   }
 
-  @Patch()
+  @Patch('update-user')
   updateUser(@GetUser('id') userId: string, @Body() dto: UpdateUserDto) {
     return this.userService.updateUser(userId, dto);
+  }
+
+  @Patch('update-password')
+  updatePassword(
+    @GetUser('id') userId: string,
+    @Body() dto: UpdatePasswordDto,
+  ) {
+    return this.userService.updatePassword(userId, dto);
   }
 }
