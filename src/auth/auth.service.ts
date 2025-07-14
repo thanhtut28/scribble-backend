@@ -11,6 +11,8 @@ import * as argon from 'argon2';
 interface JwtPayload {
   sub: string;
   email: string;
+  iat: number;
+  exp: number;
 }
 
 @Injectable()
@@ -50,7 +52,7 @@ export class AuthService {
     // Update refresh token
     await this.updateRefreshToken(user.id, tokens.refreshToken);
 
-    return tokens;
+    return { ...tokens, user };
   }
 
   async signin(dto: SigninDto) {
@@ -78,7 +80,7 @@ export class AuthService {
     // Update refresh token
     await this.updateRefreshToken(user.id, tokens.refreshToken);
 
-    return tokens;
+    return { ...tokens, user };
   }
 
   async refreshTokens(dto: TokenDto) {
@@ -118,7 +120,7 @@ export class AuthService {
       // Update refresh token
       await this.updateRefreshToken(user.id, tokens.refreshToken);
 
-      return tokens;
+      return { ...tokens, user };
     } catch {
       throw new UnauthorizedException('Access denied');
     }
@@ -158,7 +160,7 @@ export class AuthService {
         },
         {
           secret: process.env.JWT_SECRET,
-          expiresIn: '15m',
+          expiresIn: '1d',
         },
       ),
       this.jwtService.signAsync(

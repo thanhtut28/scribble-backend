@@ -8,11 +8,16 @@ export class UpdateUserDto {
   @IsString()
   @IsOptional()
   username?: string;
+}
+
+export class UpdatePasswordDto {
+  @IsString()
+  @IsOptional()
+  oldPassword?: string;
 
   @IsString()
   @IsOptional()
-  @MinLength(8)
-  password?: string;
+  newPassword?: string;
 }
 
 export class UserResponseDto {

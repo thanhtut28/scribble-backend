@@ -4,7 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UpdateUserDto, UserResponseDto } from './dto/user.dto';
+import {
+  UpdatePasswordDto,
+  UpdateUserDto,
+  UserResponseDto,
+} from './dto/user.dto';
 import * as argon from 'argon2';
 
 @Injectable()
@@ -62,7 +66,6 @@ export class UserService {
 
     if (dto.email) userData.email = dto.email;
     if (dto.username) userData.username = dto.username;
-    if (dto.password) userData.password = await argon.hash(dto.password);
 
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
@@ -102,6 +105,36 @@ export class UserService {
     });
 
     const { password, refreshToken, ...userResponse } = user;
+    return userResponse;
+  }
+
+  async updatePassword(
+    userId: string,
+    dto: UpdatePasswordDto,
+  ): Promise<UserResponseDto> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (dto.oldPassword) {
+      const isPasswordValid = await argon.verify(
+        user.password,
+        dto.oldPassword,
+      );
+      if (!isPasswordValid) {
+        throw new ForbiddenException('Invalid old password');
+      }
+    }
+
+    const hashedPassword = await argon.hash(dto.newPassword ?? '');
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    const { password, refreshToken, ...userResponse } = updatedUser;
     return userResponse;
   }
 }

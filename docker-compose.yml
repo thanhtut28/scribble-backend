@@ -12,6 +12,5 @@ services:
       POSTGRES_DB: scribble_game
     volumes:
       - postgres-data:/var/lib/postgresql/data
-
 volumes:
   postgres-data:
